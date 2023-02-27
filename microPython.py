@@ -380,7 +380,7 @@ class Logger():
 
                         #起動した時間が過去にタイムスリップしていたら、とりあえず全ての履歴をそのまま復元する。
                         #時間が経過していた時だけ、経過した分期間を空白で埋めてインデックスをずらす。
-                        if 0 < diffMin & not Logger.falseRestore: 
+                        if 0 < diffMin and (not Logger.falseRestore): 
                             offsetIdx = round(diffMin / 5) % Logger.weekLength
 
 #                            print(lastUpdateDT)
@@ -580,7 +580,7 @@ if __name__=='__main__':
     '''
     
     counter = Counter()
-    env = Environment(dt = (2023, 2, 26, 6, 21, 35, 0, 0))
+    env = Environment(dt = (2023, 2, 27, 0, 21, 30, 0, 0))
 #    env = Environment()
     logger = Logger(env.dtTuple, env)
 
@@ -600,3 +600,4 @@ wifiは、初回はパスワードなしの特定のSSIDで起動してwebサー
 ギボシ圧着端子で接続するはんだ＋圧着ペンチ、コードを噛ませて力がかからないようにする。コードは内側から絶縁して通す。
 電源投入時にロゴを出す。何センチ用か分かるようにする。
 '''
+
