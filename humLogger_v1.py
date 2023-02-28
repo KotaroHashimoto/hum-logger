@@ -510,6 +510,7 @@ if __name__=='__main__':
     # for clearing display
     counter.led.value(1)
     epd.Clear()
+    
 #    for i in range(10):
 #        counter.led.toggle()
 #        epd.delay_ms(100)
@@ -519,3 +520,4 @@ if __name__=='__main__':
 
     counter.led.value(0)
     ctrl = Control(env, logger, counter, epd)
+
