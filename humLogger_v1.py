@@ -320,44 +320,65 @@ class Logger():
     halfDayLength = int(12 * 60 / 5)
     displayLength = int(18 * 60 / 5)
     
-    logFileName = 'history.log'
+    distanceLogFile = 'distance.log'
+    tempLogFile = 'temperature.log'
     
     def __init__(self, env, dummy = False):
         
-        self.temp = [0.0 for x in range(Logger.weekLength)]
+        self.temp = [0.0 for x in range(Logger.displayLength)]
         self.distance = [0.0 for x in range(Logger.weekLength)]
 
-        if Logger.logFileName in os.listdir():
-            with open(Logger.logFileName, 'r') as fp:
+        if Logger.distanceLogFile in os.listdir():
+            with open(Logger.distanceLogFile, 'r') as fp:
                 idx = 0
                 for line in fp.readlines():
-                    self.temp[idx], self.distance[idx] = [float(x) for x in line.split(',')]
+                    self.distance[idx] = float(line)
                     idx += 1
 
         self.currentIndex = -1
 
+        if Logger.tempLogFile in os.listdir():
+            with open(Logger.tempLogFile, 'r') as fp:
+                idx = 0
+                for line in fp.readlines():
+                    self.temp[idx] = float(line)
+                    idx += 1
+
+        self.currentTempIndex = -1
+
     def update(self, tempValue, distance):
         
         self.currentIndex = (self.currentIndex + 1) % Logger.weekLength
-        self.temp[self.currentIndex] = tempValue
         self.distance[self.currentIndex] = distance
-        
+
+        self.currentTempIndex = (self.currentTempIndex + 1) % Logger.displayLength
+        self.temp[self.currentTempIndex] = tempValue
+
         self.distanceWeek = round(sum([self.distance[(self.currentIndex - i) % Logger.weekLength] for i in range(Logger.weekLength)]) / 1000, 1)
         self.distanceDay = round(sum([self.distance[(self.currentIndex - i) % Logger.weekLength] for i in range(Logger.dayLength)]))
         self.distanceHalfDay = round(sum([self.distance[(self.currentIndex - i) % Logger.weekLength] for i in range(Logger.halfDayLength)]))
         
         self.distLog = str(self.distanceWeek) + 'km/week ' + str(self.distanceDay) + 'm/day ' + str(self.distanceHalfDay) + 'm/12h'
 
-        with open(Logger.logFileName, 'w') as fp:
+        with open(Logger.distanceLogFile, 'w') as fp:
             idx = self.currentIndex + 1
             for x in range(Logger.weekLength):
-                fp.write(','.join([str(self.temp[idx]), str(self.distance[idx])]) + '\n')
+                fp.write(str(self.distance[idx]) + '\n')
                 idx = (idx + 1) % Logger.weekLength
+
+        with open(Logger.tempLogFile, 'w') as fp:
+            idx = self.currentTempIndex + 1
+            for x in range(Logger.displayLength):
+                fp.write(str(self.temp[idx]) + '\n')
+                idx = (idx + 1) % Logger.displayLength
+                
 
 class Counter():
 
     SpeedCountUnit = 10
     SpeedCountMax = 1000
+
+    speedLogFile = 'speed.log'
 
     def __init__(self, diameter):
 
@@ -367,10 +388,18 @@ class Counter():
         self.distance = 0.0
         self.led = Pin(25, Pin.OUT)
 
-        self.speeds = [0.00 for x in range(Counter.SpeedCountMax)]
+        self.startTime = time.ticks_ms()
         self.speedIndex = 0
         self.counter = 0
         self.startTime = -1
+
+        lastSpeed = 0.0
+        if Counter.speedLogFile in os.listdir():       
+            with open(Counter.speedLogFile, 'r') as fp:
+                lastSpeed = float(fp.readline())
+
+        self.speeds = [[self.startTime, lastSpeed] for x in range(Counter.SpeedCountMax)]
+
 
         # 隣がたぶん接触しているのでGP4と一緒にpull upしておく
         Pin(2, Pin.IN, Pin.PULL_UP)
@@ -396,10 +425,10 @@ class Counter():
         self.led.value(1)            
 
         if self.counter == 0:
-            if 0 < self.startTime:
-                self.speeds[self.speedIndex] = round(1000 * self.unit * Counter.SpeedCountUnit / time.ticks_diff(currentMS, self.startTime), 2)
-                self.speedIndex = (self.speedIndex + 1) % Counter.SpeedCountMax
+            self.speeds[self.speedIndex][0] = currentMS
+            self.speeds[self.speedIndex][1] = round(1000 * self.unit * Counter.SpeedCountUnit / time.ticks_diff(currentMS, self.startTime), 2)
 
+            self.speedIndex = (self.speedIndex + 1) % Counter.SpeedCountMax
             self.startTime = currentMS
 
         self.counter = (self.counter + 1) % Counter.SpeedCountUnit
@@ -411,8 +440,13 @@ class Counter():
     def update(self):
 
         self.distance = 0
-        s = str(max(self.speeds))
-        self.speedStr = 'max' + s + ('0' if 1 == len(s.split('.')[1]) else '') + 'm/s'
+
+        currentMS = time.ticks_ms()
+        maxSpeed = str(max([0.0] + [s for t, s in self.speeds if time.ticks_diff(currentMS, t) < 64800000])) # 18時間(1000 * 60 * 60 * 18)以内
+        self.speedStr = 'max' + maxSpeed + ('0' if 1 == len(maxSpeed.split('.')[1]) else '') + 'm/s'
+
+        with open(Counter.speedLogFile, 'w') as fp:
+            fp.write(maxSpeed)
 
         
 class Control():
@@ -482,7 +516,7 @@ class Control():
                 self.epd.line(i - 1, 119 - round(89 * total / distUpper), i, 119 - round(89 * (total + distList[i]) / distUpper), 0x00)
                 total += distList[i]
         
-        tempList = [self.logger.temp[(self.logger.currentIndex + i) % Logger.weekLength] for i in range(-1 * Logger.displayLength + 1, 1)]    
+        tempList = [self.logger.temp[(self.logger.currentIndex + i) % Logger.displayLength] for i in range(-1 * Logger.displayLength + 1, 1)]    
         tempLower = math.floor(min([x for x in tempList if 0 < x]))
         tempUpper = math.ceil(max([x for x in tempList if 0 < x]))
         tempWindow = tempUpper - tempLower
@@ -520,4 +554,3 @@ if __name__=='__main__':
 
     counter.led.value(0)
     ctrl = Control(env, logger, counter, epd)
-
