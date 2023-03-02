@@ -1,10 +1,9 @@
-from machine import Pin, SPI, RTC, Timer
+from machine import Pin, SPI, Timer
 import framebuf
-import utime
-import time
-import math
-import random
-import os
+from utime import sleep
+from time import ticks_diff, ticks_ms
+from math import pi, ceil floor
+from os import listdir
 
 WF_PARTIAL_2IN13_V3= [
     0x0,0x40,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,
@@ -90,7 +89,7 @@ class EPD_2in13_V3_Landscape(framebuf.FrameBuffer):
         return pin.value()
 
     def delay_ms(self, delaytime):
-        utime.sleep(delaytime / 1000.0)
+        sleep(delaytime / 1000.0)
 
     def spi_writebyte(self, data):
         self.spi.write(bytearray(data))
@@ -328,7 +327,7 @@ class Logger():
         self.temp = [0.0 for x in range(Logger.displayLength)]
         self.distance = [0.0 for x in range(Logger.weekLength)]
 
-        if Logger.distanceLogFile in os.listdir():
+        if Logger.distanceLogFile in listdir():
             with open(Logger.distanceLogFile, 'r') as fp:
                 idx = 0
                 for line in fp.readlines():
@@ -337,7 +336,7 @@ class Logger():
 
         self.currentIndex = -1
 
-        if Logger.tempLogFile in os.listdir():
+        if Logger.tempLogFile in listdir():
             with open(Logger.tempLogFile, 'r') as fp:
                 idx = 0
                 for line in fp.readlines():
@@ -346,10 +345,10 @@ class Logger():
 
         self.currentTempIndex = -1
 
-    def update(self, tempValue, distance):
+    def update(self, tempValue, dist):
         
         self.currentIndex = (self.currentIndex + 1) % Logger.weekLength
-        self.distance[self.currentIndex] = distance
+        self.distance[self.currentIndex] = dist
 
         self.currentTempIndex = (self.currentTempIndex + 1) % Logger.displayLength
         self.temp[self.currentTempIndex] = tempValue
@@ -382,19 +381,19 @@ class Counter():
 
     def __init__(self, diameter):
 
-        self.unit = math.pi * diameter # in[m]
+        self.unit = pi * diameter # in[m]
         
-        self.lastTick = time.ticks_ms()        
+        self.lastTick = ticks_ms()        
         self.distance = 0.0
         self.led = Pin(25, Pin.OUT)
 
-        self.startTime = time.ticks_ms()
+        self.startTime = ticks_ms()
         self.speedIndex = 0
         self.counter = 0
         self.startTime = -1
 
         lastSpeed = 0.0
-        if Counter.speedLogFile in os.listdir():       
+        if Counter.speedLogFile in listdir():       
             with open(Counter.speedLogFile, 'r') as fp:
                 lastSpeed = float(fp.readline())
 
@@ -416,8 +415,8 @@ class Counter():
     
     def increment(self, pin):
         
-        currentMS = time.ticks_ms()
-        diff = time.ticks_diff(currentMS, self.lastTick)
+        currentMS = ticks_ms()
+        diff = ticks_diff(currentMS, self.lastTick)
         self.lastTick = currentMS
         if diff < 250:
             return
@@ -426,7 +425,7 @@ class Counter():
 
         if self.counter == 0:
             self.speeds[self.speedIndex][0] = currentMS
-            self.speeds[self.speedIndex][1] = round(1000 * self.unit * Counter.SpeedCountUnit / time.ticks_diff(currentMS, self.startTime), 2)
+            self.speeds[self.speedIndex][1] = round(1000 * self.unit * Counter.SpeedCountUnit / ticks_diff(currentMS, self.startTime), 2)
 
             self.speedIndex = (self.speedIndex + 1) % Counter.SpeedCountMax
             self.startTime = currentMS
@@ -434,15 +433,15 @@ class Counter():
         self.counter = (self.counter + 1) % Counter.SpeedCountUnit
         self.distance += self.unit
 
-        time.sleep(0.2)
+        sleep(0.2)
         self.led.value(0)
 
     def update(self):
 
         self.distance = 0
 
-        currentMS = time.ticks_ms()
-        maxSpeed = str(max([0.0] + [s for t, s in self.speeds if time.ticks_diff(currentMS, t) < 64800000])) # 18時間(1000 * 60 * 60 * 18)以内
+        currentMS = ticks_ms()
+        maxSpeed = str(max([0.0] + [s for t, s in self.speeds if ticks_diff(currentMS, t) < 64800000])) # 18時間(1000 * 60 * 60 * 18)以内
         self.speedStr = 'max' + maxSpeed + ('0' if 1 == len(maxSpeed.split('.')[1]) else '') + 'm/s'
 
         with open(Counter.speedLogFile, 'w') as fp:
@@ -499,7 +498,7 @@ class Control():
     def drawGraph(self):
         
         distList = [self.logger.distance[(self.logger.currentIndex + i) % Logger.weekLength] for i in range(-1 * Logger.displayLength + 1, 1)]
-        distUpper = round(100 * math.ceil((1 + sum(distList)) / 100))            
+        distUpper = round(100 * ceil((1 + sum(distList)) / 100))            
         
         self.epd.text(str(distUpper), 250 - 8 * 4 - 1, 31, 0x00)
         self.epd.text('m', 250 - 8 * 4 - 1, 31 + 8, 0x00)
@@ -517,8 +516,8 @@ class Control():
                 total += distList[i]
         
         tempList = [self.logger.temp[(self.logger.currentIndex + i) % Logger.displayLength] for i in range(-1 * Logger.displayLength + 1, 1)]    
-        tempLower = math.floor(min([x for x in tempList if 0 < x]))
-        tempUpper = math.ceil(max([x for x in tempList if 0 < x]))
+        tempLower = floor(min([x for x in tempList if 0 < x]))
+        tempUpper = ceil(max([x for x in tempList if 0 < x]))
         tempWindow = tempUpper - tempLower
         
         self.epd.text(str(tempUpper) + 'C', 2, 32, 0x00)
