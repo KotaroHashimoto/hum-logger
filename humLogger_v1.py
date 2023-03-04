@@ -2,7 +2,7 @@ from machine import Pin, SPI, Timer
 import framebuf
 from utime import sleep
 from time import ticks_diff, ticks_ms
-from math import pi, ceil floor
+from math import pi, ceil, floor
 from os import listdir
 
 WF_PARTIAL_2IN13_V3= [
@@ -115,11 +115,11 @@ class EPD_2in13_V3_Landscape(framebuf.FrameBuffer):
         self.digital_write(self.cs_pin, 1)
 
     def ReadBusy(self):
-        print('busy')
+#        print('busy')
         self.delay_ms(10)
         while(self.digital_read(self.busy_pin) == 1):      # 0: idle, 1: busy
             self.delay_ms(10)    
-        print('busy release')
+#        print('busy release')
 
     def TurnOnDisplay(self):
         self.send_command(0x22)  # Display Update Control
@@ -172,7 +172,7 @@ class EPD_2in13_V3_Landscape(framebuf.FrameBuffer):
         self.send_data((Ystart >> 8) & 0xFF)
 
     def init(self):
-        print('init')
+#        print('init')
         self.reset()
         self.delay_ms(100)
         
@@ -284,7 +284,7 @@ class Environment():
     def __init__(self, name):
         
         self.name = name
-        self.tempBuff = [0 for x in range(5)]
+        self.tempBuff = [-1 for x in range(5)]
         self.idx = -1
         self.measure(0)
         
@@ -301,11 +301,14 @@ class Environment():
             
     def update(self):
 
-        t = [x for x in self.tempBuff if 0 < x]
-        self.tempValue = round(sum(t) / len(t), 1)
-
-        t = str(self.tempValue)
-        self.tempStr = t + ('' if '.' in t else '.0') + 'C'
+        length = sum((1 for x in self.tempBuff if 0 < x))
+        if 0 < length:
+            self.tempValue = round(sum((x for x in self.tempBuff if 0 < x)) / length, 1)
+            t = str(self.tempValue)
+            self.tempStr = t + ('' if '.' in t else '.0') + 'C'
+        else:
+            self.tempValue = -1
+            self.tempStr = '-' + 'C'
 
     
 class Logger():
@@ -324,24 +327,23 @@ class Logger():
     
     def __init__(self, env, dummy = False):
         
-        self.temp = [0.0 for x in range(Logger.displayLength)]
         self.distance = [0.0 for x in range(Logger.weekLength)]
 
         if Logger.distanceLogFile in listdir():
-            with open(Logger.distanceLogFile, 'r') as fp:
-                idx = 0
-                for line in fp.readlines():
-                    self.distance[idx] = float(line)
-                    idx += 1
+            idx = 0
+            for line in open(Logger.distanceLogFile, 'r'):
+                self.distance[idx] = float(line)
+                idx += 1
 
         self.currentIndex = -1
 
+        self.temp = [0.0 for x in range(Logger.displayLength)]
+
         if Logger.tempLogFile in listdir():
-            with open(Logger.tempLogFile, 'r') as fp:
-                idx = 0
-                for line in fp.readlines():
-                    self.temp[idx] = float(line)
-                    idx += 1
+            idx = 0
+            for line in open(Logger.tempLogFile, 'r'):
+                self.temp[idx] = float(line)
+                idx += 1
 
         self.currentTempIndex = -1
 
@@ -353,9 +355,9 @@ class Logger():
         self.currentTempIndex = (self.currentTempIndex + 1) % Logger.displayLength
         self.temp[self.currentTempIndex] = tempValue
 
-        self.distanceWeek = round(sum([self.distance[(self.currentIndex - i) % Logger.weekLength] for i in range(Logger.weekLength)]) / 1000, 1)
-        self.distanceDay = round(sum([self.distance[(self.currentIndex - i) % Logger.weekLength] for i in range(Logger.dayLength)]))
-        self.distanceHalfDay = round(sum([self.distance[(self.currentIndex - i) % Logger.weekLength] for i in range(Logger.halfDayLength)]))
+        self.distanceWeek = round(sum(self.distance) / 1000, 1)
+        self.distanceDay = round(sum((self.distance[(self.currentIndex - i) % Logger.weekLength] for i in range(Logger.dayLength))))
+        self.distanceHalfDay = round(sum((self.distance[(self.currentIndex - i) % Logger.weekLength] for i in range(Logger.halfDayLength))))
         
         self.distLog = str(self.distanceWeek) + 'km/week ' + str(self.distanceDay) + 'm/day ' + str(self.distanceHalfDay) + 'm/12h'
 
@@ -370,12 +372,12 @@ class Logger():
             for x in range(Logger.displayLength):
                 fp.write(str(self.temp[idx]) + '\n')
                 idx = (idx + 1) % Logger.displayLength
-                
+
 
 class Counter():
 
-    SpeedCountUnit = 10
-    SpeedCountMax = 1000
+    SpeedCountUnit = 8
+    SpeedCountMax = 512
 
     speedLogFile = 'speed.log'
 
@@ -394,8 +396,7 @@ class Counter():
 
         lastSpeed = 0.0
         if Counter.speedLogFile in listdir():       
-            with open(Counter.speedLogFile, 'r') as fp:
-                lastSpeed = float(fp.readline())
+            lastSpeed = float(open(Counter.speedLogFile, 'r').readline())
 
         self.speeds = [[self.startTime, lastSpeed] for x in range(Counter.SpeedCountMax)]
 
@@ -441,7 +442,12 @@ class Counter():
         self.distance = 0
 
         currentMS = ticks_ms()
-        maxSpeed = str(max([0.0] + [s for t, s in self.speeds if ticks_diff(currentMS, t) < 64800000])) # 18時間(1000 * 60 * 60 * 18)以内
+
+        if ticks_diff(currentMS, self.speeds[(self.speedIndex - 1) % Counter.SpeedCountMax][0] < 64800000): # 18時間(1000 * 60 * 60 * 18)以内
+            maxSpeed = str(max((s for t, s in self.speeds if ticks_diff(currentMS, t) < 64800000)))
+        else:
+            maxSpeed = '0.00'
+
         self.speedStr = 'max' + maxSpeed + ('0' if 1 == len(maxSpeed.split('.')[1]) else '') + 'm/s'
 
         with open(Counter.speedLogFile, 'w') as fp:
@@ -496,9 +502,9 @@ class Control():
         self.epd.sleep()
         
     def drawGraph(self):
-        
-        distList = [self.logger.distance[(self.logger.currentIndex + i) % Logger.weekLength] for i in range(-1 * Logger.displayLength + 1, 1)]
-        distUpper = round(100 * ceil((1 + sum(distList)) / 100))            
+
+        totalDist = sum((self.logger.distance[(self.logger.currentIndex + i) % Logger.weekLength] for i in range(-1 * Logger.displayLength + 1, 1)))
+        distUpper = round(100 * ceil((totalDist + 1) / 100))
         
         self.epd.text(str(distUpper), 250 - 8 * 4 - 1, 31, 0x00)
         self.epd.text('m', 250 - 8 * 4 - 1, 31 + 8, 0x00)
@@ -508,31 +514,30 @@ class Control():
         self.epd.hline(250 - 8 * 4 - 6, 74, 5, 0x00)
         self.epd.text('0m', 250 - 8 * 4 - 1, 121 - 9, 0x00)
 
-        total = distList[0]        
+        distIter = (self.logger.distance[(self.logger.currentIndex + i) % Logger.weekLength] for i in range(-1 * Logger.displayLength + 1, 1))
+        total = next(distIter)
 
-        if 0 < distUpper:
-            for i in range(1, len(distList)):
-                self.epd.line(i - 1, 119 - round(89 * total / distUpper), i, 119 - round(89 * (total + distList[i]) / distUpper), 0x00)
-                total += distList[i]
+        i = 1
+        for d in distIter:
+            self.epd.line(i - 1, 119 - round(89 * total / distUpper), i, 119 - round(89 * (total + d) / distUpper), 0x00)
+            total += d
+            i += 1
         
-        tempList = [self.logger.temp[(self.logger.currentIndex + i) % Logger.displayLength] for i in range(-1 * Logger.displayLength + 1, 1)]    
-        tempLower = floor(min([x for x in tempList if 0 < x]))
-        tempUpper = ceil(max([x for x in tempList if 0 < x]))
-        tempWindow = tempUpper - tempLower
+        if 0 < sum((1 for x in self.logger.temp if 0 < x)):
+            tempLower = floor(min((x for x in self.logger.temp if 0 < x)) - 0.001)
+            tempUpper = ceil(max((x for x in self.logger.temp if 0 < x)) + 0.001)
+            tempWindow = tempUpper - tempLower
         
-        self.epd.text(str(tempUpper) + 'C', 2, 32, 0x00)
-        self.epd.hline(1, 30, 5, 0x00)
-        self.epd.text(str(tempLower) + 'C', 2, 121 - 11, 0x00)
+            self.epd.text(str(tempUpper) + 'C', 2, 32, 0x00)
+            self.epd.hline(1, 30, 5, 0x00)
+            self.epd.text(str(tempLower) + 'C', 2, 121 - 11, 0x00)
         
-        self.epd.text(str(round((tempLower + tempUpper) / 2, 1)).replace('.0', 'C'), 2, 76, 0x00)
-        self.epd.hline(1, 74, 5, 0x00)        
+            self.epd.text(str(round((tempLower + tempUpper) / 2, 1)).replace('.0', 'C'), 2, 76, 0x00)
+            self.epd.hline(1, 74, 5, 0x00)        
 
-        if 0 < tempWindow:
-            for i in range(len(tempList)):
-                if tempList[i] <= 0:
-                    continue
-            
-                self.epd.pixel(i, 119 - round(89 * (tempList[i] - tempLower) / tempWindow), 0x00)
+            for i in range(len(self.logger.temp)):
+                if 0 < self.logger.temp[i]:
+                    self.epd.pixel(i, 119 - round(89 * (self.logger.temp[i] - tempLower) / tempWindow), 0x00)
 
 
 if __name__=='__main__':
