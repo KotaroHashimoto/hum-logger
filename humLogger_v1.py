@@ -327,25 +327,17 @@ class Logger():
     
     def __init__(self, env, dummy = False):
         
-        self.distance = [0.0 for x in range(Logger.weekLength)]
-
-        if Logger.distanceLogFile in listdir():
-            idx = 0
-            for line in open(Logger.distanceLogFile, 'r'):
-                self.distance[idx] = float(line)
-                idx += 1
-
         self.currentIndex = -1
-
-        self.temp = [0.0 for x in range(Logger.displayLength)]
-
-        if Logger.tempLogFile in listdir():
-            idx = 0
-            for line in open(Logger.tempLogFile, 'r'):
-                self.temp[idx] = float(line)
-                idx += 1
+        if Logger.distanceLogFile in listdir():
+            self.distance = [float(x) for x in open(Logger.distanceLogFile, 'r')]
+        else:
+            self.distance = [0.0 for x in range(Logger.weekLength)]
 
         self.currentTempIndex = -1
+        if Logger.tempLogFile in listdir():
+            self.temp = [float(x) for x in open(Logger.tempLogFile, 'r')]
+        else:
+            self.temp = [0.0 for x in range(Logger.displayLength)]
 
     def update(self, tempValue, dist):
         
