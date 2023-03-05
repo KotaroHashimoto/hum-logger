@@ -329,13 +329,21 @@ class Logger():
         
         self.currentIndex = -1
         if Logger.distanceLogFile in listdir():
-            self.distance = [float(x) for x in open(Logger.distanceLogFile, 'r')]
+            try:
+                self.distance = [float(x) for x in open(Logger.distanceLogFile, 'r')]
+            except Exception as e:
+                print('Logger.init()', Logger.distanceLogFile, 'read failed.', e)
+                self.distance = [0.0 for x in range(Logger.weekLength)]                
         else:
             self.distance = [0.0 for x in range(Logger.weekLength)]
 
         self.currentTempIndex = -1
         if Logger.tempLogFile in listdir():
-            self.temp = [float(x) for x in open(Logger.tempLogFile, 'r')]
+            try:
+                self.temp = [float(x) for x in open(Logger.tempLogFile, 'r')]
+            except Exception as e:
+                print('Logger.init()', Logger.tempLogFile, 'read failed.', e)
+                self.temp = [0.0 for x in range(Logger.displayLength)]
         else:
             self.temp = [0.0 for x in range(Logger.displayLength)]
 
@@ -353,17 +361,23 @@ class Logger():
         
         self.distLog = str(self.distanceWeek) + 'km/week ' + str(self.distanceDay) + 'm/day ' + str(self.distanceHalfDay) + 'm/12h'
 
-        with open(Logger.distanceLogFile, 'w') as fp:
-            idx = self.currentIndex + 1
-            for x in range(Logger.weekLength):
-                fp.write(str(self.distance[idx]) + '\n')
-                idx = (idx + 1) % Logger.weekLength
+        try:
+            with open(Logger.distanceLogFile, 'w') as fp:
+                idx = self.currentIndex + 1
+                for x in range(Logger.weekLength):
+                    fp.write(str(self.distance[idx]) + '\n')
+                    idx = (idx + 1) % Logger.weekLength
+        except Exception as e:
+            print('Logger.update()', Logger.distanceLogFile, 'write failed.', e)
 
-        with open(Logger.tempLogFile, 'w') as fp:
-            idx = self.currentTempIndex + 1
-            for x in range(Logger.displayLength):
-                fp.write(str(self.temp[idx]) + '\n')
-                idx = (idx + 1) % Logger.displayLength
+        try:
+            with open(Logger.tempLogFile, 'w') as fp:
+                idx = self.currentTempIndex + 1
+                for x in range(Logger.displayLength):
+                    fp.write(str(self.temp[idx]) + '\n')
+                    idx = (idx + 1) % Logger.displayLength
+        except Exception as e:
+            print('Logger.update()', Logger.tempLogFile, 'write failed.', e)
 
 
 class Counter():
@@ -386,9 +400,14 @@ class Counter():
         self.counter = 0
         self.startTime = -1
 
-        lastSpeed = 0.0
-        if Counter.speedLogFile in listdir():       
-            lastSpeed = float(open(Counter.speedLogFile, 'r').readline())
+        if Counter.speedLogFile in listdir():
+            try:
+                lastSpeed = float(open(Counter.speedLogFile, 'r').readline())
+            except Exception as e:
+                print('Counter.init()', Counter.speedLogFile, 'read failed.', e)
+                lastSpeed = 0.0                
+        else:
+            lastSpeed = 0.0
 
         self.speeds = [[self.startTime, lastSpeed] for x in range(Counter.SpeedCountMax)]
 
@@ -428,6 +447,8 @@ class Counter():
 
         sleep(0.2)
         self.led.value(0)
+        
+#        print('Counter.increment()', self.distance, self.counter, self.speedIndex, self.speeds[(self.speedIndex - 1) % Counter.SpeedCountMax])
 
     def update(self):
 
@@ -442,10 +463,13 @@ class Counter():
 
         self.speedStr = 'max' + maxSpeed + ('0' if 1 == len(maxSpeed.split('.')[1]) else '') + 'm/s'
 
-        with open(Counter.speedLogFile, 'w') as fp:
-            fp.write(maxSpeed)
+        try:
+            with open(Counter.speedLogFile, 'w') as fp:
+                fp.write(maxSpeed)
+        except Exception as e:
+            print('Counter.update()', Counter.speedLogFile, 'write failed.', e)
 
-        
+
 class Control():
     
     def __init__(self, env, logger, counter, epd):
@@ -550,3 +574,4 @@ if __name__=='__main__':
 
     counter.led.value(0)
     ctrl = Control(env, logger, counter, epd)
+
