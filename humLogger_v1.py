@@ -551,9 +551,10 @@ class Control():
             self.epd.text(str(round((tempLower + tempUpper) / 2, 1)).replace('.0', 'C'), 2, 76, 0x00)
             self.epd.hline(1, 74, 5, 0x00)        
 
-            for i in range(len(self.logger.temp)):
-                if 0 < self.logger.temp[i]:
-                    self.epd.pixel(i, 119 - round(89 * (self.logger.temp[i] - tempLower) / tempWindow), 0x00)
+            for i in range(-1 * Logger.displayLength + 1, 1):
+                idx = (self.logger.currentTempIndex + i) % Logger.displayLength
+                if 0 < self.logger.temp[idx]:
+                    self.epd.pixel(i + 215, 119 - round(89 * (self.logger.temp[idx] - tempLower) / tempWindow), 0x00)
 
 
 if __name__=='__main__':
@@ -574,4 +575,3 @@ if __name__=='__main__':
 
     counter.led.value(0)
     ctrl = Control(env, logger, counter, epd)
-
